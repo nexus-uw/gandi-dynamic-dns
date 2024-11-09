@@ -2,6 +2,7 @@
 
 : "${GANDI_API_KEY:?must set environment variable}"
 : "${DOMAIN:?must set environment variable}"
+: "${IP_RESOLVER:?must set environment variable}"
 
 # Fallback for previous variable name
 if [ -z "$RECORD_NAMES" ] && [ -n "$RECORD_NAME" ]; then
@@ -15,15 +16,17 @@ api_key="$GANDI_API_KEY"
 domain="$DOMAIN"
 record_names="$RECORD_NAMES"
 update_interval="${UPDATE_INTERVAL:-1h}"
-time_to_live="${TIME_TO_LIVE:-3600}"
+time_to_live="${TIME_TO_LIVE:-300}"
+ipresolver="$IP_RESOLVER"
 
 echo "updating domain '$domain' every '$update_interval' for records:
 $(echo "$record_names" | tr ',' '\n')
 "
 
+#todo this should be pulled from dns
 previous_ip=
 get_ip() {
-  if ! ip="$(curl --fail --silent https://ipv4.icanhazip.com)"; then
+  if ! ip="$(curl --fail --silent $ipresolver)"; then
     echo >&2 'error: failed to get external IP address'
     return 1
   fi
@@ -37,7 +40,7 @@ update_ip() {
     echo >&2 'warning: skipping empty record name'
     return
   fi
-  
+
   request_data=$(cat <<EOF
 {
     "rrset_values": ["$ip"],
@@ -46,12 +49,14 @@ update_ip() {
 EOF
 )
 
-  if ! curl --fail --silent \
-       --request PUT \
+echo $request_data
+
+  if ! curl --fail \
+       --request PUT\
        --header 'Content-Type: application/json' \
-       --header "X-Api-Key:$api_key" \
+       --header "authorization: Bearer $api_key" \
        --data "$request_data" \
-       https://dns.api.gandi.net/api/v5/domains/"$domain"/records/"$record_name"/A; then
+       https://dns.api.gandi.net/api/v5/domains/"$domain"/records/"$record_name"/AAA; then
     echo >&2 "error: failed to update IP address for record \"$record_name\""
     return 1
   fi
